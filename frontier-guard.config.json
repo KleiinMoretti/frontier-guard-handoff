@@ -1,0 +1,37 @@
+{
+  "version": "3.0.0",
+  "quality_profile": "ZERO_REGRESSION",
+  "override_keywords": [
+    "/direct",
+    "/max",
+    "/frontier",
+    "/bypass"
+  ],
+  "fast_path_inline_bypass": {
+    "max_files": 1,
+    "max_changed_lines": 35
+  },
+  "token_budget_cap": {
+    "session_total_tokens": 250000,
+    "frontier_blueprint_input_cap": 6000,
+    "frontier_blueprint_output_cap": 350,
+    "frontier_diagnosis_output_cap": 250,
+    "frontier_micro_audit_output_cap": 80,
+    "worker_input_cap_per_call": 10000
+  },
+  "max_frontier_calls_per_run": 3,
+  "auto_downgrade_threshold": {
+    "quota_remaining_pct": 20,
+    "complexity_score_ceiling": 0.55,
+    "tier1_max_complexity": 0.25,
+    "max_tier1_attempts_before_tier2": 1,
+    "max_tier2_attempts_before_frontier": 2
+  },
+  "context_hygiene": {
+    "strip_chat_history": true,
+    "strip_global_system_prompt": true,
+    "ast_signature_only_for_deps": true,
+    "require_style_clone_anchor": true,
+    "require_adversarial_test_seeds": true
+  }
+}
