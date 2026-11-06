@@ -1,127 +1,142 @@
----
-name: frontier-guard-handoff
-description: >-
-  Universal Quota-Preserving Adaptive Delegator v3.0 ("Frontier-Guard-Handoff")
-  for Google Antigravity workflows across all domains (Backend, Frontend/UI,
-  Data/SQL, DevOps, and Research/Writing). Enforces cheap-by-default execution,
-  Blueprint-Only Frontier invocations (Opus 5.5 / Gemini Argon), Style-Clone
-  Anchors, Adversarial Test Seeding, Fast-Path Inline Bypass for micro-edits,
-  and an instant per-prompt kill-switch via `/direct` (or `/max`, `/frontier`).
----
+# Frontier-Guard-Handoff (v3.1)
 
-# Universal Quota-Preserving Adaptive Delegator v3.0 (`frontier-guard-handoff`)
+[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](https://github.com/KleiinMoretti/frontier-guard-handoff)
+[![Antigravity](https://img.shields.io/badge/Antigravity-2.0+-green.svg)](https://github.com/KleiinMoretti/frontier-guard-handoff)
+[![Python](https://img.shields.io/badge/python-3.9+-yellow.svg)](https://python.org)
+[![Quality Profile](https://img.shields.io/badge/profile-ZERO__REGRESSION-brightgreen.svg)](https://github.com/KleiinMoretti/frontier-guard-handoff)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
-## 0. Instant Per-Prompt Kill-Switch (`/direct`, `/max`, `/frontier`, `/bypass`)
+> **Universal Quota-Preserving Adaptive Delegator for Google Antigravity & Frontier Coding Agents.**
 
-> [!IMPORTANT]
-> **PER-PROMPT OVERRIDE RULE**
-> If the user's message contains any of the following slash-keywords anywhere in the prompt:
-> - **`/direct`** (Primary keyword)
-> - **`/max`**
-> - **`/frontier`**
-> - **`/bypass`**
->
-> **ACTION:** Immediately **SUSPEND** `frontier-guard-handoff` for that entire turn.
-> - Do **NOT** offload subtasks to `flash` or `flash_lite`.
-> - Do **NOT** cap output tokens to blueprints.
-> - Execute 100% of the coding, reasoning, or writing inline using the active flagship model (Opus 5.5 / Gemini Argon).
-> - Automatically re-arm `frontier-guard-handoff` on the next user prompt that omits the bypass keyword.
+`frontier-guard-handoff` is an agentic orchestration protocol designed to protect rate limits and token budgets on flagship frontier models (Claude Opus 5.5, Gemini Argon, and Thinking tiers) without compromising code quality. It enforces cheap-by-default execution, blueprint-only reasoning, 15-line style-clone anchors, anti-recursion worker termination guards, and instant per-prompt bypass switches.
 
 ---
 
-## 1. Fast-Path Inline Bypass (Anti-Overhead Guard)
+## 🏛️ Architecture Overview
 
-Subagent orchestration has a ~1.5–2.5s startup cost. Do **NOT** spawn background workers when inline execution is cheaper and faster.
-
-**Execute INLINE immediately (no subagent dispatch) if ANY of the following hold:**
-1. The user included `/direct`, `/max`, `/frontier`, or `/bypass`.
-2. The request is a conversational question, explanation, or <300-token answer.
-3. The task modifies **1 file** with an estimated diff of **`<= 35 lines`** of code/text.
-4. Executing a single diagnostic CLI command or reading 1–2 files.
-
-For all multi-file, boilerplate-heavy, or high-token generation workloads (`> 35 lines` or `>= 2 files`), enforce the **Adaptive Delegation Pipeline** below.
+```mermaid
+flowchart TD
+    UserPrompt["User Prompt Received"] --> KillSwitchCheck{"Contains standalone /direct, /max, /frontier, /bypass, /off, /no-delegate?"}
+    
+    KillSwitchCheck -- "YES" --> InlineDirect["100% Inline Flagship Execution\n(Opus 5.5 / Argon - Zero Delegation)"]
+    KillSwitchCheck -- "NO" --> FastPathCheck{"Fast-Path Bypass?\n(<= 1 file AND <= 35 changed lines)"}
+    
+    FastPathCheck -- "YES" --> InlineFast["Inline Fast-Path Execution\n(Zero subagent startup overhead)"]
+    FastPathCheck -- "NO" --> ComplexityScorer["5-Factor Complexity Scorer\nC in [0.00, 1.00]"]
+    
+    ComplexityScorer --> TierRouter{"Complexity Score (C)"}
+    
+    TierRouter -- "C < 0.25" --> Tier1["Tier 1: Flash-Lite\nDirect async leaf worker\n(Zero Frontier tokens)"]
+    TierRouter -- "0.25 <= C < 0.55" --> Tier2["Tier 2: Flash\nAsync worker + 15-line Style Anchor\n+ Automated Verification Gate"]
+    TierRouter -- "C >= 0.55" --> Tier3["Tier 3: Frontier Blueprint\n(<= 350 tokens) + 3-5 Edge Vectors"]
+    
+    Tier3 --> Tier2FanOut["Tier 2 Async Fan-Out\n(Flash implements boilerplate/tests)"]
+    Tier2FanOut --> VerifyGate{"Automated Verification Gate\n(tsc / pytest / cargo test)"}
+    VerifyGate -- "Pass" --> MicroAudit{"Blast Radius >= 0.8?"}
+    VerifyGate -- "Fail" --> WorkerRetry["Worker Auto-Remediation\n(Max 2 retries before Frontier RCA)"]
+    
+    MicroAudit -- "YES" --> FrontierAudit["Frontier Micro-Audit\n(<= 80 tokens on git diff)"]
+    MicroAudit -- "NO" --> Complete["Ready / Integrated"]
+    FrontierAudit --> Complete
+```
 
 ---
 
-## 2. Deterministic 5-Factor Complexity Scorer ($C \in [0.00, 1.00]$)
+## ✨ Core Features & Principles
 
-Compute the task's **Complexity Score $C$** before dispatching:
+### 1. 🛡️ Subagent Anti-Recursion Guard (Rule #0.1)
+Spawned subagents are structurally forbidden from recursively delegating. Worker prompts include `<worker_anti_recursion_guard>` instructions requiring direct implementation and return of `<subtask_result>`. Custom worker types can be registered with `define_subagent(EnableSubagentTools: false)` for strict runtime enforcement.
 
+### 2. ⚡ Instant Per-Prompt Kill-Switch (`/direct`, `/max`, `/frontier`, `/bypass`, `/off`, `/no-delegate`)
+Prepend or append any supported slash-keyword to bypass delegation instantly for that turn.
+* Boundary-aware regex prevents false positives on file paths (`src/direct/service.ts`) or URLs (`https://example.com/max/test`).
+* Automatically re-arms on subsequent prompts omitting the keyword.
+
+### 3. ⏱️ Fast-Path Inline Bypass
+Tasks touching `<= 1 file` with `<= 35 changed lines`, single diagnostic commands, or quick conversational queries are executed inline immediately to avoid subagent startup latency.
+
+### 4. 🧮 Deterministic 5-Factor Complexity Scorer
+Calculates objective task difficulty across 5 dimensions:
 $$C = 0.25(\text{Coupling}) + 0.25(\text{Concurrency}) + 0.20(\text{Novelty}) + 0.15(\text{BlastRadius}) + 0.15(\text{Irreversibility})$$
 
-| Score Range | Target Tier | Execution Strategy |
-| :--- | :--- | :--- |
-| **$C < 0.25$** | **Tier 1 (`flash_lite`)** | Direct async background offload (`invoke_subagent(Model="flash_lite")`). Zero Frontier tokens. |
-| **$0.25 \le C < 0.55$** | **Tier 2 (`flash` / `haiku`)** | Async offload (`invoke_subagent(Model="flash")`) + **15-line Style-Clone Anchor** + Automated Verification Gate. |
-| **$C \ge 0.55$** | **Tier 3 Blueprint (`opus_5_5` / `argon`) -> Tier 2 Fan-Out** | Frontier emits a **`<= 350`-token Blueprint + 3–5 Adversarial Edge Vectors** -> Fan out heavy generation to `flash` asynchronously -> Verify + **`<= 80`-token Frontier Micro-Audit** on final diff. |
+### 5. ✂️ Polyglot Context Slicing + Style-Clone Anchors
+* **Python**: Parses AST via `ast.parse()` to extract complete function definitions, parameter lists, type annotations, and class methods.
+* **TypeScript**: Extracts full `interface`, `enum`, and `type` blocks (up to 25 lines) and balances multi-line function signatures.
+* **Rust / Go / Java / C# / C++**: Multi-line parenthesis balancing up to signature termination.
+* **15-Line Style-Clone Anchor**: Attaches an exact exemplar from your codebase so `flash` replicates local patterns, imports, and error handling.
+* **XML CDATA Wrappers**: Prevents generic signatures like `Result<T, E>` or chained bash commands like `tsc && vitest` from breaking XML envelope parsing.
+
+### 6. 🚫 Strict Frontier Firewall (Opus 5.5 / Gemini Argon)
+Frontier tokens are strictly reserved for:
+* `BLUEPRINT_ONLY` (`<= 350` tokens)
+* `ROOT_CAUSE_DIAGNOSIS` (`<= 250` tokens, unlocked only after 2 worker failures)
+* `MICRO_AUDIT` (`<= 80` tokens on unified diffs)
+
+Banned on flagship models: raw boilerplate, full unit test files, DTO scaffolds, regexes, data formatting, and routine comments.
 
 ---
 
-## 3. Universal Multi-Domain Adapters
+## 📦 Installation & Setup
 
-`frontier-guard-handoff` adapts its Blueprint, Worker Offload, and Verification Gate across **all 5 core domains**:
+### Option A: Antigravity Global Skill
+Copy or clone to your global skills directory:
+```bash
+git clone https://github.com/KleiinMoretti/frontier-guard-handoff.git ~/.gemini/config/skills/frontier-guard-handoff
+```
 
-| Domain | Tier 3 Frontier Blueprint (`<= 350` tok) | Tier 1/2 Worker Offload (`flash` / `flash_lite`) | Automated Verification Gate |
-| :--- | :--- | :--- | :--- |
-| **1. Polyglot Software (TS, Py, Rust, Go, C++, Java, C#)** | State invariants, concurrency locks, interface contracts, <=12-line pseudocode, 3–5 adversarial test vectors. | Full implementation bodies, imports, error wrappers, unit/property tests, docstrings. | Compiler/typecheck (`tsc`, `pytest`, `cargo check`, `go test`, `dotnet build`, `mvn test`). |
-| **2. Frontend UI / CSS / 3D / Motion** | Aesthetic direction, CSS grid/flex geometry, animation easing curves, state-machine transitions, accessibility requirements. | JSX/HTML component scaffolding, Tailwind/CSS rules, SVG/Three.js boilerplate, responsive breakpoints. | Typecheck + DOM/Console error check + a11y contrast & landmark audit. |
-| **3. Data Engineering / SQL / Spark / dbt** | Grain definition, join cardinality guards, partitioning/clustering strategy, window-function logic. | Full SQL/SQLX/dbt models, schema YAML files, data-cleaning regexes, PySpark boilerplate. | SQL dry-run (`bq query --dry_run` / `EXPLAIN`), row-count & null-invariant assertions. |
-| **4. DevOps / IaC (Terraform, K8s, CI/CD)** | IAM least-privilege boundary, network topology, rollback safety invariants. | HCL resource blocks, GitHub Actions YAML, Dockerfile multi-stage boilerplate, Helm templates. | `terraform validate`, `kubectl --dry-run=client`, YAML schema lint. |
-| **5. Deep Research / Strategy / Writing** | Core thesis, analytical framework, counter-arguments, section outline, falsifiable claims checklist. | Parallel web/doc fetching (`research` subagent on `flash`), section drafting, formatting, tables. | **Citation & Claim Audit**: Verify every quantitative claim maps to a retrieved source URL/file. |
+### Option B: Project / Workspace Skill
+Add to your project's `.agents` directory:
+```bash
+git clone https://github.com/KleiinMoretti/frontier-guard-handoff.git .agents/skills/frontier-guard-handoff
+cp .agents/skills/frontier-guard-handoff/frontier-guard.config.json .agents/frontier-guard.config.json
+```
 
----
+Add the following rule to your workspace `GEMINI.md`:
+```markdown
+# Workspace Quota-Preserving Adaptive Delegator Rule (`frontier-guard-handoff` v3.1)
 
-## 4. Strict Frontier-Tier Gatekeeping (Opus 5.5 / Argon Firewall)
+Always enforce the **Quota-Preserving Adaptive Delegator (`frontier-guard-handoff`)** protocol to preserve rate limits and token quota on flagship models (Claude Opus 5.5, Gemini Argon, and Thinking tiers):
 
-> [!CAUTION]
-> **BANNED ON FRONTIER MODELS (Unless `/direct` is active)**
-> Never burn Opus 5.5 or Argon output tokens on:
-> - Writing raw boilerplate, DTOs, CRUD scaffolds, or config files (`JSON`/`YAML`/`TOML`)
-> - Writing full unit test files or mock fixtures (Frontier only emits 3–5 bullet *Adversarial Edge Vectors*)
-> - Data formatting, CSV/JSON/Markdown table serialization, or regex construction
-> - Linear script refactoring, symbol renaming, file splitting, or barrel exports (`index.ts`)
-> - Routine docstrings, JSDoc/TSDoc, READMEs, or inline comments
-> - Syntax error fixes or mechanical linter remediation
+0. **Subagent Anti-Recursion Guard (Rule #0.1 - Worker Termination Rule)**:
+   - If you are a spawned subagent (i.e., your prompt contains `<subtask_envelope>` or `[WORKER_MODE]`, or you were invoked to implement a specific subtask), **DO NOT** delegate further or spawn sub-subagents. Execute the task directly, run the verification command, and return `<subtask_result>`.
+   - Recommend using `define_subagent` with `EnableSubagentTools: false` for worker subagents so recursion is structurally impossible in runtime.
 
-> [!IMPORTANT]
-> **PERMITTED FRONTIER MODES (Strictly Token-Capped)**
-> 1. `BLUEPRINT_ONLY` (`<= 350` output tokens): Architectural synthesis, novel algorithms, distributed concurrency state machines, UI design specs, or research thesis outlines.
-> 2. `ROOT_CAUSE_DIAGNOSIS` (`<= 250` output tokens): Unlocked **only after** a Tier 2 worker fails 2 attempts with compiler/test stderr attached.
-> 3. `MICRO_AUDIT` (`<= 80` output tokens): Reviews a unified `git diff` on high-blast-radius tasks (`blast_radius >= 0.8`) and outputs `VERDICT: PASS` or `VERDICT: PATCH <line>: <fix>`.
+1. **Instant Per-Prompt Kill-Switch (`/direct`, `/max`, `/frontier`, `/bypass`, `/off`, `/no-delegate`)**:
+   - If the user's prompt contains a standalone slash-keyword `/direct`, `/max`, `/frontier`, `/bypass`, `/off`, or `/no-delegate` (preceded by start-of-line or whitespace, NOT part of a file path or URL), **immediately disable** all downward delegation and token caps for that turn. Execute 100% of the request inline using the active flagship model.
+   - Automatically re-enable delegation on the next prompt that does not contain a bypass keyword.
 
----
+2. **Fast-Path Inline Bypass (Micro-Tasks)**:
+   - Execute inline immediately (do not spawn subagents) when answering conversational questions, running 1–2 diagnostic commands, or editing `<= 1 file` with `<= 35 changed lines`.
 
-## 5. Surgical Context Slicing + Style-Clone Protocol
-
-Never pass chat history or whole dependency files to a subagent. Use [`.agents/skills/frontier-guard-handoff/scripts/context_slicer.py`](file:///c:/Users/harno/.gemini/antigravity-ide/scratch/.agents/skills/frontier-guard-handoff/scripts/context_slicer.py) to construct a compact `<subtask_envelope>` (`< 1,500` tokens):
-
-1. **Zero Chat History**: Strip all prior conversation turns and unrelated tool outputs.
-2. **Polyglot Signature Slicing**: Pass only exported function/class/interface/table headers from dependency files.
-3. **15-Line Style-Clone Anchor**: Attach one 15-line snippet from an existing file in the repo so `flash` mirrors the exact local error-handling, logging, and formatting conventions.
-4. **Adversarial Test Seeds**: Attach the 3–5 edge cases generated by the Frontier blueprint.
+3. **Cheap-by-Default Asynchronous Offloading (Multi-File / Heavy Generation)**:
+   - For tasks touching `>= 2 files` or generating `> 35 lines` of boilerplate, unit tests, regexes, data formatting, UI scaffolding, SQL/IaC blocks, or documentation:
+     - **BANNED on Opus 5.5 / Argon**: Raw boilerplate, unit test suites, data serialization, regex, linear refactoring, docstrings, or syntax fixes.
+     - **Plan Deconstruction**: Keep architectural synthesis on the primary model as a compact **Blueprint (`<= 350` tokens)** + **3–5 Adversarial Edge Vectors**, then fan out heavy code/test/doc generation asynchronously via `invoke_subagent` with `Model: "flash"` (Tier 2) or `Model: "flash_lite"` (Tier 1).
+     - **Surgical Context Slicing**: Strip chat history; pass only exported multi-line type/interface/function signatures + a **15-line Style-Clone Anchor** from an existing repo file via `scripts/context_slicer.py`.
+     - **Zero-Idle Parallel Work**: While background subagents run, immediately continue local non-blocking tasks (wiring, configs, exports) and verify outputs with local compiler/test gates upon completion.
+     - For full multi-domain specifications, consult `.agents/skills/frontier-guard-handoff/SKILL.md`.
+```
 
 ---
 
-## 6. Asynchronous Non-Blocking Execution Lifecycle
+## ⚙️ Configuration (`frontier-guard.config.json`)
 
-1. **Partition into Background vs. Local Sets**:
-   - **Set A (Background Subagents)**: Isolated module coding, unit tests, data formatting, docstrings, parallel web/codebase research.
-   - **Set B (Immediate Local Orchestrator Work)**: Directory creation, config updates, barrel exports (`index.ts`), dependency installation, or inline edits to the main entry file.
-2. **Dispatch & Continue (`async: true`)**:
-   - Launch Set A via `invoke_subagent` with `Model: "flash"` or `Model: "flash_lite"`.
-   - Immediately execute Set B locally in the same workflow without waiting or polling.
-3. **Reactive Wakeup & Verification**:
-   - Let Antigravity reactively wake the orchestrator when background subagents complete, then run the domain Verification Gate (`tsc`, `pytest`, `dry_run`, etc.).
+Configure thresholds, token limits, and keyword overrides in `frontier-guard.config.json`:
 
----
-
-## 7. Antigravity Tool & Configuration Bindings
-
-### 7.1 Configuration Schema (`.agents/frontier-guard.config.json`)
 ```json
 {
-  "version": "3.0.0",
-  "override_keywords": ["/direct", "/max", "/frontier", "/bypass"],
+  "version": "3.1.0",
+  "quality_profile": "ZERO_REGRESSION",
+  "override_keywords": [
+    "/direct",
+    "/max",
+    "/frontier",
+    "/bypass",
+    "/off",
+    "/no-delegate"
+  ],
+  "allow_any_slash_keyword_override": false,
+  "subagent_anti_recursion_guard": true,
   "fast_path_inline_bypass": {
     "max_files": 1,
     "max_changed_lines": 35
@@ -141,47 +156,75 @@ Never pass chat history or whole dependency files to a subagent. Use [`.agents/s
     "tier1_max_complexity": 0.25,
     "max_tier1_attempts_before_tier2": 1,
     "max_tier2_attempts_before_frontier": 2
+  },
+  "context_hygiene": {
+    "strip_chat_history": true,
+    "strip_global_system_prompt": true,
+    "ast_signature_only_for_deps": true,
+    "require_style_clone_anchor": true,
+    "require_adversarial_test_seeds": true
   }
 }
 ```
 
-### 7.2 Tool Signatures (`dispatch_subagent`, `check_subtask_status`, `escalate_to_frontier`)
+---
 
-```typescript
-interface DispatchSubagentArgs {
-  subtask_id: string;
-  domain: "code" | "ui" | "data_sql" | "devops" | "research";
-  complexity_score: number;
-  model_tier: "tier1_flash_lite" | "tier2_flash" | "tier2_haiku";
-  role: string;
-  envelope: {
-    task_objective: string;
-    frontier_blueprint?: string;
-    dependency_signatures: string[];
-    style_clone_anchor: { file_path: string; snippet: string };
-    adversarial_test_seeds?: string[];
-    verification_command: string;
-  };
-  async: true;
-  workspace_mode?: "inherit" | "branch" | "share";
-}
+## 🛠️ CLI Reference (`context_slicer.py`)
 
-interface CheckSubtaskStatusArgs {
-  subtask_ids: string[];
-  wait_strategy: "non_blocking_poll" | "await_any";
-  run_verification_gate: boolean;
-}
+The included polyglot context slicer automates prompt evaluation, scoring, and XML subtask construction:
 
-interface EscalateToFrontierArgs {
-  frontier_model: "claude_opus_5_5" | "gemini_argon";
-  invocation_mode: "BLUEPRINT_ONLY" | "ROOT_CAUSE_DIAGNOSIS" | "MICRO_AUDIT";
-  complexity_score: number;
-  prior_tier_attempts?: Array<{
-    subtask_id: string;
-    model_used: string;
-    stderr_snippet: string;
-  }>;
-  payload: string;
-  max_output_tokens: 350 | 250 | 80;
-}
+### 1. Run Built-in Automated Self-Tests
+```bash
+python scripts/context_slicer.py test
 ```
+
+### 2. Check Prompt for Override or Fast-Path Bypass
+```bash
+python scripts/context_slicer.py check --prompt "Refactor auth module /direct"
+# Output: {"delegation_enabled": false, "reason": "Kill-switch keyword detected: /direct", "execution_mode": "INLINE_FRONTIER_DIRECT"}
+
+python scripts/context_slicer.py check --prompt "inspect src/direct/file.ts" --files 2 --lines 50
+# Output: {"delegation_enabled": true, "reason": "Standard Quota-Preserving Adaptive Delegation active", "execution_mode": "ADAPTIVE_DELEGATION"}
+```
+
+### 3. Calculate 5-Factor Complexity Score
+```bash
+python scripts/context_slicer.py score \
+  --coupling 0.8 \
+  --concurrency 0.7 \
+  --novelty 0.6 \
+  --blast-radius 0.9 \
+  --irreversibility 0.8
+```
+
+### 4. Build Compact XML Subtask Envelope
+```bash
+python scripts/context_slicer.py slice \
+  --id "sub-01" \
+  --objective "Implement token validation with Result<T, E>" \
+  --tier "tier2_flash" \
+  --deps "src/types.ts" "src/auth.ts" \
+  --anchor-file "src/session.ts" \
+  --anchor-start 1 \
+  --verify-cmd "npx tsc --noEmit && npx vitest run"
+```
+
+---
+
+## 🧪 Verification Matrix
+
+| Test Suite | Purpose | Status |
+| :--- | :--- | :--- |
+| **Override Regex & Rejection** | Validates keyword matching and rejects mid-path false positives (`src/direct/...`) | ✅ Passed |
+| **Config Loader & Fallbacks** | Auto-discovers and shallow-merges JSON config from workspace/parent hierarchy | ✅ Passed |
+| **Complexity Scorer Bounds** | Enforces $[0.0, 1.0]$ clamp and raises `ValueError` on out-of-bound inputs | ✅ Passed |
+| **Python AST Parser** | Extracts complete parameter lists, type annotations, and class methods | ✅ Passed |
+| **TypeScript Block Extractor** | Captures complete multi-line `interface`, `enum`, and `type` blocks | ✅ Passed |
+| **Polyglot Parenthesis Balancer**| Balances multi-line signatures for Rust, Go, Java, and C# without ReDoS risk | ✅ Passed |
+| **XML CDATA Validator** | Ensures generics (`Result<T, E>`) and commands (`&&`) parse cleanly via `ElementTree` | ✅ Passed |
+
+---
+
+## 📄 License
+
+MIT © [KleiinMoretti](https://github.com/KleiinMoretti)

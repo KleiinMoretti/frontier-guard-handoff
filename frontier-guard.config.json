@@ -1,12 +1,16 @@
 {
-  "version": "3.0.0",
+  "version": "3.1.0",
   "quality_profile": "ZERO_REGRESSION",
   "override_keywords": [
     "/direct",
     "/max",
     "/frontier",
-    "/bypass"
+    "/bypass",
+    "/off",
+    "/no-delegate"
   ],
+  "allow_any_slash_keyword_override": false,
+  "subagent_anti_recursion_guard": true,
   "fast_path_inline_bypass": {
     "max_files": 1,
     "max_changed_lines": 35
