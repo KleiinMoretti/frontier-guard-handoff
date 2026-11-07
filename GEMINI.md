@@ -1,4 +1,4 @@
-# Workspace Quota-Preserving Adaptive Delegator Rule (`frontier-guard-handoff` v3.1)
+# Workspace Quota-Preserving Adaptive Delegator Rule (`frontier-guard-handoff` v4.0)
 
 Always enforce the **Quota-Preserving Adaptive Delegator (`frontier-guard-handoff`)** protocol to preserve rate limits and token quota on flagship models (Claude Opus 5.5, Gemini Argon, and Thinking tiers):
 
@@ -16,7 +16,7 @@ Always enforce the **Quota-Preserving Adaptive Delegator (`frontier-guard-handof
 3. **Cheap-by-Default Asynchronous Offloading (Multi-File / Heavy Generation)**:
    - For tasks touching `>= 2 files` or generating `> 35 lines` of boilerplate, unit tests, regexes, data formatting, UI scaffolding, SQL/IaC blocks, or documentation:
      - **BANNED on Opus 5.5 / Argon**: Raw boilerplate, unit test suites, data serialization, regex, linear refactoring, docstrings, or syntax fixes.
-     - **Plan Deconstruction**: Keep architectural synthesis on the primary model as a compact **Blueprint (`<= 350` tokens)** + **3–5 Adversarial Edge Vectors**, then fan out heavy code/test/doc generation asynchronously via `invoke_subagent` with `Model: "flash"` (Tier 2) or `Model: "flash_lite"` (Tier 1).
+     - **Plan Deconstruction**: Keep architectural synthesis on the primary model as a compact **Blueprint (`<= 600` tokens)** + **3–5 Adversarial Edge Vectors**, then fan out heavy code/test/doc generation asynchronously via `ext_worker.py` (Lane 1, $C < 0.40$) or `invoke_subagent` with `Model: "flash"` (Lane 2).
      - **Surgical Context Slicing**: Strip chat history; pass only exported multi-line type/interface/function signatures + a **15-line Style-Clone Anchor** from an existing repo file via `scripts/context_slicer.py`.
      - **Zero-Idle Parallel Work**: While background subagents run, immediately continue local non-blocking tasks (wiring, configs, exports) and verify outputs with local compiler/test gates upon completion.
      - For full multi-domain specifications, consult `.agents/skills/frontier-guard-handoff/SKILL.md`.

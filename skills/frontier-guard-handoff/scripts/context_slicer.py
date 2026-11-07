@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
 """
-Frontier-Guard-Handoff v3.1 — Universal Polyglot Context Slicer & Complexity Scorer.
+Frontier-Guard-Handoff v4.0 — Universal Polyglot Context Slicer & Complexity Scorer.
 
-Key Capabilities (v3.1):
+Key Capabilities (v4.0):
 1. Instant Kill-Switch Detection (/direct, /max, /frontier, /bypass, /off, /no-delegate)
    with boundary-aware regex preventing mid-path/URL false positives.
 2. Fast-Path Inline Bypass Detection (<= 1 file and <= 35 lines).
 3. Anti-Recursion Subagent Worker Guard enforcement.
 4. Auto-loading configuration from .agents/frontier-guard.config.json or frontier-guard.config.json.
-5. Deterministic 5-factor complexity scoring with validated & clamped inputs.
-6. ReDoS-free multi-line signature extraction:
+5. Deterministic 5-factor complexity scoring with validated & clamped inputs, routing to
+   external worker lane or Antigravity subagents.
+6. Quality Guard enforcement: flash_lite restricted from code domains, blueprint artifact caps.
+7. ReDoS-free multi-line signature extraction:
    - Python: ast.parse() with parameter lists, type annotations, and class methods.
    - TypeScript / JS: full interface, enum, and type blocks (up to 25 lines) + balanced functions.
    - Rust / Go / Java / C# / C++: multi-line balanced signatures up to '{' or ';'.
    - SQL & Terraform HCL declarations.
-7. Valid XML Envelope Generation with CDATA wrappers for generics and shell commands.
-8. Built-in Self-Test Suite (`python context_slicer.py test`).
+8. Valid XML Envelope Generation with CDATA wrappers for generics and shell commands.
+9. Built-in Self-Test Suite (`python context_slicer.py test`).
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
 DEFAULT_CONFIG: Dict[str, Any] = {
-    "version": "3.1.0",
+    "version": "4.0.0",
     "quality_profile": "ZERO_REGRESSION",
     "override_keywords": [
         "/direct",
@@ -42,9 +44,72 @@ DEFAULT_CONFIG: Dict[str, Any] = {
         "/no-delegate",
     ],
     "allow_any_slash_keyword_override": False,
+    "subagent_anti_recursion_guard": True,
     "fast_path_inline_bypass": {
         "max_files": 1,
         "max_changed_lines": 35,
+    },
+    "quality_guard": {
+        "cap_blueprint_artifact_not_reasoning": True,
+        "external_lane_max_complexity": 0.40,
+        "flash_lite_allowed_for_code": False,
+        "lane_demotion_min_pass_rate": 0.70,
+        "lane_demotion_window": 10,
+        "ledger_path": ".agents/fgh-ledger.jsonl",
+    },
+    "external_lane": {
+        "enabled": True,
+        "privacy_mode": "scrub",
+        "allow_remote_gateways": True,
+        "request_timeout_s": 90,
+        "max_retries": 1,
+        "max_output_tokens": 4096,
+        "gateways": [
+            {
+                "name": "ollama",
+                "base_url": "http://127.0.0.1:11434/v1",
+                "api_key_env": None,
+                "local": True,
+                "model": "qwen2.5-coder:14b",
+            },
+            {
+                "name": "lmstudio",
+                "base_url": "http://127.0.0.1:1234/v1",
+                "api_key_env": None,
+                "local": True,
+                "model": "local-model",
+            },
+            {
+                "name": "omniroute",
+                "base_url": "http://127.0.0.1:20128/v1",
+                "api_key_env": "OMNIROUTE_API_KEY",
+                "local": False,
+                "model": "auto",
+            },
+            {
+                "name": "freellmapi",
+                "base_url": "http://127.0.0.1:3001/v1",
+                "api_key_env": "FREELLMAPI_API_KEY",
+                "local": False,
+                "model": "auto",
+            },
+        ],
+    },
+    "token_budget_cap": {
+        "session_total_tokens": 250000,
+        "frontier_blueprint_input_cap": 6000,
+        "frontier_blueprint_output_cap": 600,
+        "frontier_diagnosis_output_cap": 400,
+        "frontier_micro_audit_output_cap": 150,
+        "worker_input_cap_per_call": 10000,
+    },
+    "max_frontier_calls_per_run": 3,
+    "auto_downgrade_threshold": {
+        "quota_remaining_pct": 20,
+        "complexity_score_ceiling": 0.55,
+        "tier1_max_complexity": 0.25,
+        "max_tier1_attempts_before_tier2": 1,
+        "max_tier2_attempts_before_frontier": 2,
     },
     "complexity_weights": {
         "coupling": 0.25,
@@ -56,6 +121,13 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "tier_thresholds": {
         "tier1_ceiling": 0.25,
         "tier2_ceiling": 0.55,
+    },
+    "context_hygiene": {
+        "strip_chat_history": True,
+        "strip_global_system_prompt": True,
+        "ast_signature_only_for_deps": True,
+        "require_style_clone_anchor": True,
+        "require_adversarial_test_seeds": True,
     },
 }
 
@@ -101,6 +173,10 @@ def find_and_load_config(explicit_path: Optional[str] = None) -> Dict[str, Any]:
             continue
 
     return config
+
+
+# Export alias for external consumers
+load_config = find_and_load_config
 
 
 def check_prompt_override(
@@ -214,6 +290,21 @@ def compute_complexity_score(
 
     t1 = thresholds.get("tier1_ceiling", 0.25)
     t2 = thresholds.get("tier2_ceiling", 0.55)
+    q_cfg = cfg.get("quality_guard", DEFAULT_CONFIG.get("quality_guard", {}))
+    ext_max = q_cfg.get("external_lane_max_complexity", 0.40)
+    flash_lite_allowed = q_cfg.get("flash_lite_allowed_for_code", False)
+
+    # Determine execution lane:
+    # C < 0.25 -> external_or_flash
+    # 0.25 <= C < external_lane_max_complexity (0.40) -> external_or_flash
+    # 0.40 <= C < 0.55 -> antigravity_flash
+    # C >= 0.55 -> frontier_blueprint_then_flash
+    if score < ext_max:
+        lane = "external_or_flash"
+    elif score < t2:
+        lane = "antigravity_flash"
+    else:
+        lane = "frontier_blueprint_then_flash"
 
     if score < t1:
         tier = "tier1_flash_lite"
@@ -223,12 +314,19 @@ def compute_complexity_score(
         mode = "DIRECT_ASYNC_WORKER_WITH_STYLE_ANCHOR"
     else:
         tier = "tier3_frontier_blueprint_then_tier2_flash"
-        mode = "BLUEPRINT_ONLY_350_TOKENS_THEN_FANOUT"
+        mode = "BLUEPRINT_ONLY_600_TOKENS_THEN_FANOUT"
+
+    # Quality Guard: flash_lite is disallowed for implementation code domains
+    if not flash_lite_allowed and domain in ("code", "ui", "data_sql", "devops"):
+        if tier == "tier1_flash_lite":
+            tier = "tier2_flash"
+            mode = "DIRECT_ASYNC_WORKER_WITH_STYLE_ANCHOR"
 
     return {
         "domain": domain,
         "complexity_score": score,
         "recommended_tier": tier,
+        "lane": lane,
         "execution_mode": mode,
         "requires_micro_audit": clamped["blast_radius"] >= 0.8 or clamped["irreversibility"] >= 0.8,
         "breakdown": clamped,
@@ -549,7 +647,7 @@ def build_subtask_envelope(
 def run_self_tests() -> bool:
     """Run comprehensive unit tests covering all 6 architectural bug fixes."""
     print("=====================================================")
-    print("Running Frontier-Guard-Handoff v3.1 Self-Test Suite")
+    print("Running Frontier-Guard-Handoff v4.0 Self-Test Suite")
     print("=====================================================\n")
 
     # 1. Test Prompt Override Regex & Edge Cases
@@ -584,18 +682,32 @@ def run_self_tests() -> bool:
     assert "version" in cfg
     assert "/direct" in cfg["override_keywords"]
     assert cfg["fast_path_inline_bypass"]["max_changed_lines"] == 35
+    assert "quality_guard" in cfg
+    assert "external_lane" in cfg
     print("      -> Passed configuration loader tests.")
 
     # 3. Test Complexity Scoring & Factor Validation
-    print("[3/7] Testing complexity scoring & factor clamping / validation...")
-    score_low = compute_complexity_score(0.1, 0.1, 0.1, 0.1, 0.1)
+    print("[3/7] Testing complexity scoring, lane routing & factor clamping / validation...")
+    score_low = compute_complexity_score(0.1, 0.1, 0.1, 0.1, 0.1, domain="research")
     assert score_low["recommended_tier"] == "tier1_flash_lite"
+    assert score_low["lane"] == "external_or_flash"
+
+    # Quality Guard: flash_lite restricted from code domains
+    score_code_low = compute_complexity_score(0.1, 0.1, 0.1, 0.1, 0.1, domain="code")
+    assert score_code_low["recommended_tier"] == "tier2_flash"
+    assert score_code_low["lane"] == "external_or_flash"
 
     score_med = compute_complexity_score(0.4, 0.4, 0.3, 0.2, 0.2)
     assert score_med["recommended_tier"] == "tier2_flash"
+    assert score_med["lane"] == "external_or_flash"
+
+    score_antigravity = compute_complexity_score(0.5, 0.5, 0.5, 0.5, 0.5)
+    assert score_antigravity["recommended_tier"] == "tier2_flash"
+    assert score_antigravity["lane"] == "antigravity_flash"
 
     score_high = compute_complexity_score(0.9, 0.8, 0.7, 0.9, 0.8)
     assert score_high["recommended_tier"] == "tier3_frontier_blueprint_then_tier2_flash"
+    assert score_high["lane"] == "frontier_blueprint_then_flash"
     assert score_high["requires_micro_audit"] is True
 
     # Out of bounds check: must raise ValueError
@@ -725,7 +837,7 @@ def run_self_tests() -> bool:
     print("      -> Passed XML CDATA & ElementTree validation tests.")
 
     print("\n=====================================================")
-    print("All Frontier-Guard v3.1 self-tests passed successfully (7/7)!")
+    print("All Frontier-Guard v4.0 self-tests passed successfully (7/7)!")
     print("=====================================================\n")
     return True
 
@@ -736,7 +848,7 @@ def run_self_tests() -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Frontier-Guard-Handoff v3.1 Universal Polyglot Context Slicer & Complexity Scorer"
+        description="Frontier-Guard-Handoff v4.0 Universal Polyglot Context Slicer & Complexity Scorer"
     )
     parser.add_argument("--config", help="Path to custom frontier-guard.config.json")
     sub = parser.add_subparsers(dest="cmd")

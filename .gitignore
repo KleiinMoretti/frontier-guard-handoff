@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+fgh-ledger.jsonl
+.agents/fgh-ledger.jsonl
