@@ -1,0 +1,48 @@
+{
+  "version": "5.0.0",
+  "switches": {
+    "bypass": ["/bypass", "/direct", "/max", "/frontier", "/off", "/no-delegate"],
+    "lean": ["/lean"]
+  },
+  "routing": {
+    "inline_max_lines": 40,
+    "inline_max_files": 2,
+    "delegate_min_lines": 60,
+    "explore_min_files": 3,
+    "unverifiable_inline_max_lines": 120,
+    "lean": {
+      "inline_max_lines": 15,
+      "inline_max_files": 1,
+      "delegate_min_lines": 30,
+      "unverifiable_inline_max_lines": 60
+    }
+  },
+  "high_risk_keywords": [
+    "auth", "oauth", "login", "password", "session", "token", "jwt", "crypto",
+    "encrypt", "decrypt", "signature", "payment", "billing", "invoice", "stripe",
+    "migration", "migrate", "drop table", "delete from", "truncate", "schema change",
+    "concurrency", "race", "deadlock", "mutex", "lock", "transaction",
+    "permission", "rbac", "acl", "iam", "security", "secret", "prod", "production"
+  ],
+  "external": {
+    "enabled": true,
+    "privacy": "scrub",
+    "allow_remote": true,
+    "timeout_s": 90,
+    "retries": 1,
+    "max_tokens": 4096,
+    "temperature": 0.2,
+    "gateways": [
+      {"name": "ollama", "base_url": "http://127.0.0.1:11434/v1", "api_key_env": null, "local": true, "model": "qwen2.5-coder:14b"},
+      {"name": "lmstudio", "base_url": "http://127.0.0.1:1234/v1", "api_key_env": null, "local": true, "model": "local-model"},
+      {"name": "omniroute", "base_url": "http://127.0.0.1:20128/v1", "api_key_env": "OMNIROUTE_API_KEY", "local": false, "model": "auto"},
+      {"name": "freellmapi", "base_url": "http://127.0.0.1:3001/v1", "api_key_env": "FREELLMAPI_API_KEY", "local": false, "model": "auto"}
+    ]
+  },
+  "ledger": {
+    "path": ".agents/fgh-ledger.jsonl",
+    "window": 10,
+    "min_runs": 5,
+    "min_pass_rate": 0.7
+  }
+}

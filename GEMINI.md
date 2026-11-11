@@ -1,22 +1,24 @@
-# Workspace Quota-Preserving Adaptive Delegator Rule (`frontier-guard-handoff` v4.0)
+<!-- fgh:begin -->
+# Frontier Guard v5 (`frontier-guard-handoff`)
 
-Always enforce the **Quota-Preserving Adaptive Delegator (`frontier-guard-handoff`)** protocol to preserve rate limits and token quota on flagship models (Claude Opus 5.5, Gemini Argon, and Thinking tiers):
+Preserve flagship model quota (Claude Opus, Gemini Argon / Pro / Thinking tiers) without losing output quality:
 
-0. **Subagent Anti-Recursion Guard (Rule #0.1 - Worker Termination Rule)**:
-   - If you are a spawned subagent (i.e., your prompt contains `<subtask_envelope>` or `[WORKER_MODE]`, or you were invoked to implement a specific subtask), **DO NOT** delegate further or spawn sub-subagents. Execute the task directly, run the verification command, and return `<subtask_result>`.
-   - Recommend using `define_subagent` with `EnableSubagentTools: false` for worker subagents so recursion is structurally impossible in runtime.
+1. **Switches (this turn only)**:
+   - `/bypass`, `/direct`, `/max`, `/frontier`, `/off`, `/no-delegate` (as standalone tokens, never inside paths/URLs): suspend all delegation and run 100% inline on the active model.
+   - `/lean`: lower delegation thresholds (`inline <= 15 lines / 1 file`, `delegate >= 30 lines`) for maximum quota savings.
+   - **Worker anti-recursion**: if your prompt starts with `[FGH-WORKER]` or `[FGH-SCOUT]`, you are a worker—never spawn subagents; complete the brief, run its verify command, and return the compact report.
 
-1. **Instant Per-Prompt Kill-Switch (`/direct`, `/max`, `/frontier`, `/bypass`, `/off`, `/no-delegate`)**:
-   - If the user's prompt contains a standalone slash-keyword `/direct`, `/max`, `/frontier`, `/bypass`, `/off`, or `/no-delegate` (preceded by start-of-line or whitespace, NOT part of a file path or URL), **immediately disable** all downward delegation and token caps for that turn. Execute 100% of the request inline using the active flagship model.
-   - Automatically re-enable delegation on the next prompt that does not contain a bypass keyword.
+2. **Always-On Context Hygiene (biggest quota saver)**:
+   - Search (`grep` / `rg`) before reading files; read line ranges instead of whole large files.
+   - Cap command output (`Select-Object -First 60` / `--quiet`); never poll background tasks or subagents.
+   - Batch independent tool calls into a single turn; never cap your own internal reasoning.
 
-2. **Fast-Path Inline Bypass (Micro-Tasks)**:
-   - Execute inline immediately (do not spawn subagents) when answering conversational questions, running 1–2 diagnostic commands, or editing `<= 1 file` with `<= 35 changed lines`.
-
-3. **Cheap-by-Default Asynchronous Offloading (Multi-File / Heavy Generation)**:
-   - For tasks touching `>= 2 files` or generating `> 35 lines` of boilerplate, unit tests, regexes, data formatting, UI scaffolding, SQL/IaC blocks, or documentation:
-     - **BANNED on Opus 5.5 / Argon**: Raw boilerplate, unit test suites, data serialization, regex, linear refactoring, docstrings, or syntax fixes.
-     - **Plan Deconstruction**: Keep architectural synthesis on the primary model as a compact **Blueprint (`<= 600` tokens)** + **3–5 Adversarial Edge Vectors**, then fan out heavy code/test/doc generation asynchronously via `ext_worker.py` (Lane 1, $C < 0.40$) or `invoke_subagent` with `Model: "flash"` (Lane 2).
-     - **Surgical Context Slicing**: Strip chat history; pass only exported multi-line type/interface/function signatures + a **15-line Style-Clone Anchor** from an existing repo file via `scripts/context_slicer.py`.
-     - **Zero-Idle Parallel Work**: While background subagents run, immediately continue local non-blocking tasks (wiring, configs, exports) and verify outputs with local compiler/test gates upon completion.
-     - For full multi-domain specifications, consult `.agents/skills/frontier-guard-handoff/SKILL.md`.
+3. **5-Lane Deterministic Routing** (see skill `frontier-guard-handoff` or run `python scripts/fgh.py route`):
+   - **L0 Tools**: Use formatters, `--fix` linters, codemods, codegen, or a short script for mechanical multi-file edits (~0 model tokens).
+   - **L1 Inline**: Use the active model for design, debugging, reviews, high-risk code (auth, crypto, payments, migrations, concurrency), and small edits (`<= 40 lines` across `<= 2 files`).
+   - **L2 Flash Subagents**:
+     - Unknown/broad codebase search (`> 3 files`) -> `fgh-scout` (`Model: "flash"`, read-only, returns `<= 300 words` with `file:line` refs).
+     - Specified + mechanically verifiable work (`>= 60 lines`) -> `fgh-worker` (`Model: "flash"`, disjoint file ownership, style anchor + verify command). Never use `flash_lite` for code.
+   - **L3 External Text Lane**: Pure-text verifiable generation (unit tests, fixtures, docstrings, regexes) may run via `python scripts/fgh.py ext run` (Ollama/LM Studio local first, then OmniRoute/FreeLLMAPI with secret scrubbing), falling back to L2 on failure.
+   - **Verify before trusting**: Always run the verification command yourself when a worker finishes; after 2 worker failures, take over inline.
+<!-- fgh:end -->
